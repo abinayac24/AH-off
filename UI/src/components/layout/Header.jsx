@@ -75,10 +75,6 @@ export function Header({ onMenuToggle }) {
       </div>
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-        {/* Theme toggle */}
-        <button onClick={toggleTheme} className="btn btn-ghost btn-icon" title="Toggle theme">
-          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
 
         {/* Notifications — only for non-candidates */}
         {!isCandidate && (
