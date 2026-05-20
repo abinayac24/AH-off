@@ -9,9 +9,11 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useThemeStore } from '../../store/themeStore';
+import { useConfigStore } from '../../store/configStore';
 import { Avatar } from '../ui/Avatar';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { useEffect } from 'react';
 
 const navConfig = {
   superadmin: [
@@ -47,6 +49,12 @@ export function Sidebar({ collapsed, onToggle }) {
   const role = user?.role?.name;
   const navItems = navConfig[role] || [];
   const navigate = useNavigate();
+  const { fetchConfigs } = useConfigStore();
+  const platformName = useConfigStore(state => state.configs['platform_name'] || 'AgnoHire');
+
+  useEffect(() => {
+    fetchConfigs();
+  }, [fetchConfigs]);
 
   async function handleLogout() {
     try {
@@ -82,7 +90,7 @@ export function Sidebar({ collapsed, onToggle }) {
                 color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden',
               }}
             >
-              AgnoHire
+              {platformName}
             </motion.span>
           )}
         </AnimatePresence>

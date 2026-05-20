@@ -3,6 +3,7 @@ import { hashPassword } from '../utils/hash.js';
 import { success, error, paginate } from '../utils/response.js';
 import { prisma } from '../configs/db.js';
 import { emailService } from '../services/email.service.js';
+import { configService } from '../services/config.service.js';
 
 export const usersController = {
   async getProfile(req, res) {
@@ -115,6 +116,22 @@ export const usersController = {
       // Check email exists
       const existing = await userRepository.findByEmail(email);
       if (existing) return error(res, 'Email already in use', 409, 'CONFLICT');
+
+      // Fetch the role name
+      const role = await prisma.role.findUnique({ where: { id: roleId } });
+      if (!role) return error(res, 'Role not found', 404, 'NOT_FOUND');
+
+      if (sectorId) {
+        if (role.name === 'admin') {
+          const limit = await configService.getMaxAdminsPerSector();
+          const currentCount = await prisma.user.count({ where: { sectorId, role: { name: 'admin' }, isActive: true } });
+          if (currentCount >= limit) return error(res, `Maximum limit of ${limit} admins per sector reached`, 403, 'LIMIT_EXCEEDED');
+        } else if (role.name === 'hr') {
+          const limit = await configService.getMaxHrsPerSector();
+          const currentCount = await prisma.user.count({ where: { sectorId, role: { name: 'hr' }, isActive: true } });
+          if (currentCount >= limit) return error(res, `Maximum limit of ${limit} HRs per sector reached`, 403, 'LIMIT_EXCEEDED');
+        }
+      }
 
       const passwordHash = password ? await hashPassword(password) : null;
 

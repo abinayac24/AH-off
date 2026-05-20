@@ -3,6 +3,7 @@ import { prisma } from '../configs/db.js';
 import { success, error, paginate } from '../utils/response.js';
 import { v4 as uuidv4 } from 'uuid';
 import { emailService } from '../services/email.service.js';
+import { configService } from '../services/config.service.js';
 import Papa from 'papaparse';
 import fs from 'fs';
 import path from 'path';
@@ -130,6 +131,11 @@ export const candidatesController = {
         data = parsed.data;
       }
 
+      const uploadLimit = await configService.getMaxBulkUploadLimit();
+      if (data.length > uploadLimit) {
+        return error(res, `Upload exceeds the maximum allowed limit of ${uploadLimit} candidates per file`, 403, 'LIMIT_EXCEEDED');
+      }
+
       const required = ['name', 'email'];
       const validRows = [];
       const errorRows = [];
@@ -219,13 +225,34 @@ export const candidatesController = {
     try {
       const { candidateIds, recruiterIds, listId } = req.body;
 
-      // Distribute evenly
-      const assignments = candidateIds.map((candidateId, idx) => ({
-        candidateId,
-        recruiterId: recruiterIds[idx % recruiterIds.length],
-        listId,
-        assignedAt: new Date(),
+      const maxPerRecruiter = await configService.getMaxCandidatesPerRecruiter();
+
+      // Check existing assigned counts for these recruiters
+      const existingCounts = await Promise.all(recruiterIds.map(async (rid) => {
+        const count = await prisma.candidateAssignment.count({ where: { recruiterId: rid } });
+        return { recruiterId: rid, count };
       }));
+
+      // Distribute evenly but enforce limits
+      const assignments = [];
+      const countsMap = Object.fromEntries(existingCounts.map(ec => [ec.recruiterId, ec.count]));
+      
+      for (let i = 0; i < candidateIds.length; i++) {
+        const candidateId = candidateIds[i];
+        const recruiterId = recruiterIds[i % recruiterIds.length];
+        
+        if (countsMap[recruiterId] >= maxPerRecruiter) {
+          return error(res, `Recruiter assignment limit of ${maxPerRecruiter} reached for a selected recruiter`, 403, 'LIMIT_EXCEEDED');
+        }
+        
+        assignments.push({
+          candidateId,
+          recruiterId,
+          listId,
+          assignedAt: new Date(),
+        });
+        countsMap[recruiterId]++;
+      }
 
       await prisma.candidateAssignment.createMany({ data: assignments, skipDuplicates: true });
 

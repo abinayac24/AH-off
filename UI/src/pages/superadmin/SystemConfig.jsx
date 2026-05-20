@@ -62,12 +62,6 @@ export default function SystemConfig() {
           description: 'The title displayed in the header and navigation elements.',
           type: 'text',
         },
-        {
-          key: 'dark_mode_default',
-          label: 'Default Dark Mode',
-          description: 'Whether new accounts default to dark mode when registered.',
-          type: 'boolean',
-        },
       ],
     },
     {

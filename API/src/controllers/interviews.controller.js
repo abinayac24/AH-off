@@ -4,6 +4,7 @@ import { socketService } from '../services/socket.service.js';
 import { prisma } from '../configs/db.js';
 import { success, error, paginate } from '../utils/response.js';
 import { v4 as uuidv4 } from 'uuid';
+import { configService } from '../services/config.service.js';
 
 export const interviewsController = {
   async list(req, res) {
@@ -89,6 +90,13 @@ export const interviewsController = {
       const { token } = req.params;
       const schedule = await interviewRepository.findByToken(token);
       if (!schedule) return error(res, 'Invalid interview link', 404, 'NOT_FOUND');
+      
+      const expiryHours = await configService.getInterviewTokenExpiryHours();
+      const expiryTime = new Date(schedule.createdAt).getTime() + (expiryHours * 60 * 60 * 1000);
+      if (Date.now() > expiryTime) {
+        return error(res, 'Interview link has expired', 403, 'EXPIRED_LINK');
+      }
+
       return success(res, { schedule });
     } catch (err) {
       return error(res, err.message);
@@ -129,8 +137,12 @@ export const interviewsController = {
       });
 
       // Calculate AI score
-      const totalScore = answers.reduce((acc, a) => acc + (computeScore(a) || 0), 0);
-      const aiScore = answers.length ? totalScore / answers.length : 0;
+      const aiEnabled = await configService.isAiScoringEnabled();
+      let aiScore = 0;
+      if (aiEnabled) {
+        const totalScore = answers.reduce((acc, a) => acc + (computeScore(a) || 0), 0);
+        aiScore = answers.length ? totalScore / answers.length : 0;
+      }
 
       // Update interview + create result
       const interview = await interviewRepository.update(id, {
