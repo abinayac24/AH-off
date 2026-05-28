@@ -7,7 +7,7 @@ import {
   Smartphone, Wifi, Monitor, Battery, Volume2, Camera,
   RefreshCw, Lock, AlertCircle, Play, FileCode, Award, Code, Check, X,
   Bell, HelpCircle, FileText, QrCode, CircleUserRound, SlidersHorizontal, ClipboardList,
-  Square, Bookmark, Sun, Moon, LayoutGrid
+  Square, Bookmark, Sun, Moon, LayoutGrid, Users
 } from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -53,6 +53,8 @@ export default function InterviewRoom() {
   const [flagged, setFlagged] = useState({});
   const [phoneWarnings, setPhoneWarnings] = useState(0);
   const [isPhoneVisible, setIsPhoneVisible] = useState(false);
+  const [multiplePersonWarnings, setMultiplePersonWarnings] = useState(0);
+  const [isMultiplePersonsVisible, setIsMultiplePersonsVisible] = useState(false);
 
   // Voice recognition & TTS states
   const [isListening, setIsListening] = useState(false);
@@ -356,6 +358,7 @@ export default function InterviewRoom() {
     let detectionInterval = null;
     let isDetecting = false;
     let lastWarningTime = 0;
+    let lastPersonWarningTime = 0;
 
     const loadModelAndDetect = async () => {
       try {
@@ -369,11 +372,15 @@ export default function InterviewRoom() {
           try {
             const predictions = await model.detect(videoRef.current);
             const phoneDetected = predictions.some(p => p.class === 'cell phone' && p.score > 0.60);
+            const personsCount = predictions.filter(p => p.class === 'person' && p.score > 0.60).length;
+            const multiplePersonsDetected = personsCount > 1;
             
             setIsPhoneVisible(phoneDetected);
+            setIsMultiplePersonsVisible(multiplePersonsDetected);
             
+            const now = Date.now();
+
             if (phoneDetected) {
-              const now = Date.now();
               // 5-second cooldown between warnings to avoid rapid triggers
               if (now - lastWarningTime > 5000) {
                 lastWarningTime = now;
@@ -385,6 +392,30 @@ export default function InterviewRoom() {
                   api.post(`/interviews/${schedule?.interview?.id}/log-violation`, {
                     violationType: 'phone_detected',
                     description: `Mobile phone detected in candidate camera. Warning count: ${next}`,
+                    severity: next >= 2 ? 'high' : 'medium',
+                  }).catch(err => console.error(err));
+                  
+                  if (next >= 3) {
+                    toast.error('System threshold exceeded. Auto-submitting answers.');
+                    handleSubmit();
+                  }
+                  
+                  return next;
+                });
+              }
+            }
+
+            if (multiplePersonsDetected) {
+              if (now - lastPersonWarningTime > 5000) {
+                lastPersonWarningTime = now;
+                setMultiplePersonWarnings(prev => {
+                  const next = prev + 1;
+                  toast.error(`Proctor Warning ${next}/3: Multiple persons detected in frame!`, { duration: 4000 });
+                  
+                  // Log violation
+                  api.post(`/interviews/${schedule?.interview?.id}/log-violation`, {
+                    violationType: 'multiple_persons_detected',
+                    description: `Multiple persons detected in candidate camera. Warning count: ${next}`,
                     severity: next >= 2 ? 'high' : 'medium',
                   }).catch(err => console.error(err));
                   
@@ -2039,6 +2070,15 @@ export default function InterviewRoom() {
                     <div>
                       <span className="font-bold">Mobile Phone Detected! Warning {phoneWarnings + 1}/3</span>
                       <p className="text-[10px] text-red-500 mt-0.5">Using unauthorized devices is strictly prohibited. Please put away your phone.</p>
+                    </div>
+                  </div>
+                )}
+                {isMultiplePersonsVisible && (
+                  <div className="w-full bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-2.5 rounded-2xl flex items-center gap-3 backdrop-blur-md shadow-2xl text-xs">
+                    <Users className="w-5 h-5 text-red-400 animate-bounce flex-shrink-0" />
+                    <div>
+                      <span className="font-bold">Multiple Persons Detected! Warning {multiplePersonWarnings + 1}/3</span>
+                      <p className="text-[10px] text-red-500 mt-0.5">Please ensure you are alone in the room during the entire assessment.</p>
                     </div>
                   </div>
                 )}

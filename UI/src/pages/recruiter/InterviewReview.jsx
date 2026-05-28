@@ -194,8 +194,8 @@ export default function InterviewReview() {
                   else if (cStatus === 'in_progress' || cStatus === 'pending') currentStepIndex = 1;
                   else currentStepIndex = 0; // scheduled or unknown
                   
-                  const isCompleted = currentStepIndex > stepIndex;
-                  const isCurrent = currentStepIndex === stepIndex;
+                  const isCompleted = currentStepIndex > stepIndex || (currentStepIndex === 3 && stepIndex === 3);
+                  const isCurrent = currentStepIndex === stepIndex && currentStepIndex !== 3;
 
                   return (
                     <div key={step} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
